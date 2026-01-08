@@ -44,14 +44,32 @@ if prompt := st.chat_input("Ask me a complex question..."):
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                # generate_response now returns a tuple (stream, context_str)
+                # Status container for progress updates (Searching, Opening apps...)
+                status_box = st.empty()
+                
+                def on_status_update(msg):
+                    status_box.info(msg, icon="⏳")
+
                 start_time = time.time()
+                
+                # generate_response return (stream_generator, context_str)
+                # Note: The stream itself now handles command execution internally
                 stream, context_str = llm.generate_response(st.session_state.messages)
                 
-                # Generator wrapper to extract text from llama-cpp stream
+                # Generator wrapper to extract text from llama-cpp stream (or the custom string generator)
                 def stream_generator():
-                    for chunk in stream:
-                        yield chunk['choices'][0]['text']
+                    # If stream is a generator function (from smart_stream), it yields strings directly
+                    try:
+                        for chunk in stream:
+                            # If chunk is already a string (from smart_stream), yield it
+                            if isinstance(chunk, str):
+                                yield chunk
+                            # If chunk is dictionary (from raw llama stream - fallback), yield text
+                            elif isinstance(chunk, dict) and 'choices' in chunk:
+                                yield chunk['choices'][0]['text']
+                    except Exception as e:
+                         # Handle any generator errors
+                         yield f"\n[Stream Error: {str(e)}]"
                 
                 # Stream the response
                 response_text = st.write_stream(stream_generator())
@@ -66,6 +84,7 @@ if prompt := st.chat_input("Ask me a complex question..."):
                 st.session_state.last_context = context_str
                 
             except Exception as e:
+                status_box.empty() # Clear status if error
                 st.error(f"An error occurred: {e}")
 
 # Sidebar for controls or info
@@ -73,21 +92,22 @@ with st.sidebar:
     st.header("About")
     st.info("This assistant uses a quantized Qwen 2.5 7B Instruct model running locally.")
     
-    with st.expander("📝 Hướng dẫn sử dụng Ký ức"):
+    with st.expander("📝 Hướng dẫn sử dụng"):
         st.markdown("""
-        **1. Ghi nhớ:**
+        **1. 🧠 Quản lý Ký ức:**
         - `Hãy nhớ: [nội dung]`
-        - `Remember: [content]`
-        *(Hoặc cứ nói "Tôi tên là..." máy sẽ tự nhớ)*
-        
-        **2. Quên:**
         - `Quên: [nội dung cũ]`
-        - `Forget: [old content]`
-        
-        **3. Cập nhật:**
         - `Cập nhật: [nội dung mới]`
-        - `Thay đổi: [nội dung mới]`
-        *(Máy sẽ tự tìm cái cũ liên quan để xóa và lưu cái mới)*
+        
+        **2. 🌐 Tìm kiếm Internet:**
+        - `Tìm kiếm: [từ khóa]`
+        - `Tra cứu: [vấn đề]`
+        - `Giá vàng/Thời tiết...`
+        *(Tự động tìm nếu cần thông tin mới)*
+        
+        **3. 🚀 Mở Ứng dụng:**
+        - `Mở Youtube / Facebook`
+        - `Bật nhạc / Soundcloud`
         """)
     if st.button("Clear Chat"):
         st.session_state.messages = []
