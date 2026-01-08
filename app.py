@@ -44,12 +44,19 @@ if prompt := st.chat_input("Ask me a complex question..."):
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                # generate_response now returns a tuple (text, context_str)
+                # generate_response now returns a tuple (stream, context_str)
                 start_time = time.time()
-                response_text, context_str = llm.generate_response(st.session_state.messages)
+                stream, context_str = llm.generate_response(st.session_state.messages)
+                
+                # Generator wrapper to extract text from llama-cpp stream
+                def stream_generator():
+                    for chunk in stream:
+                        yield chunk['choices'][0]['text']
+                
+                # Stream the response
+                response_text = st.write_stream(stream_generator())
                 end_time = time.time()
                 
-                st.markdown(response_text)
                 st.caption(f"⏱️ Finished in {end_time - start_time:.2f}s")
                 
                 # Append assistant response to history

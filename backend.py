@@ -3,7 +3,7 @@ from llama_cpp import Llama
 import memory
 
 # Path to your GGUF model
-MODEL_PATH = "models/qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf"
+MODEL_PATH = "models/qwen2.5-3b-instruct-q4_k_m.gguf"
 
 class LocalLLM:
     def __init__(self):
@@ -14,7 +14,9 @@ class LocalLLM:
         self.llm = Llama(
             model_path=MODEL_PATH,
             n_gpu_layers=0,  # CPU only
-            n_ctx=4096,      # Giảm xuống 4096 để chạy nhanh hơn trên CPU
+            n_ctx=2048,      # Giảm xuống 2048 để load/eval nhanh hơn
+            n_threads=6,     # Tối ưu cho chip i5 Gen 13 (P-Cores)
+            n_batch=512,     # Batch size tiêu chuẩn
             verbose=False
         )
 
@@ -95,16 +97,16 @@ class LocalLLM:
             
         full_prompt += "<|im_start|>assistant\n"
         
-        # 3. Chạy Model
-        output = self.llm(
+        # 3. Chạy Model với chế độ STREAM
+        # Trả về generator object thay vì text
+        stream = self.llm(
             full_prompt,
             max_tokens=1024,
             stop=["<|im_end|>", "<|endoftext|>"],
             echo=False,
-            temperature=0.7
+            temperature=0.7,
+            stream=True  # Bật Streaming
         )
         
-        response_text = output['choices'][0]['text'].strip()
-        
-        # Trả về cả câu trả lời lẫn ngữ cảnh (để debug hiển thị ra UI nếu cần)
-        return response_text, context_str
+        # Trả về stream generator để UI xử lý, và context để hiển thị debug
+        return stream, context_str
